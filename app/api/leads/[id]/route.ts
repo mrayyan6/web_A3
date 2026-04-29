@@ -8,6 +8,7 @@ import { LEAD_STATUSES } from '@/types/lead';
 import User from '@/models/User';
 import { serializeLead } from '@/lib/leads';
 import { computePriority, computeScore } from '@/lib/scoring';
+import { sendLeadAssignedEmail } from '@/lib/email';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -111,9 +112,17 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
-    return NextResponse.json({
-      lead: serializeLead(updated.toObject() as Parameters<typeof serializeLead>[0]),
-    });
+    const serialized = serializeLead(updated.toObject() as Parameters<typeof serializeLead>[0]);
+
+    // If a specific agent was just assigned, notify them in background
+    if (session.user.role === 'Admin' && 'assignedTo' in body && body.assignedTo && body.assignedTo !== '') {
+      const agent = updated.assignedTo as { name: string; email: string } | null;
+      if (agent && typeof agent === 'object' && 'email' in agent) {
+        sendLeadAssignedEmail(serialized, agent.email, agent.name).catch(() => {});
+      }
+    }
+
+    return NextResponse.json({ lead: serialized });
   } catch (err) {
     console.error('[LEADS_PATCH]', err);
     const message = err instanceof Error ? err.message : 'Failed to update lead';

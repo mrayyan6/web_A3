@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LEAD_STATUSES, PRIORITY_LEVELS } from '@/types/lead';
 import type { SerializedLead, SerializedAgent, LeadStatus, Priority } from '@/types/lead';
 import LeadFormModal from './LeadFormModal';
@@ -70,6 +70,22 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
       return true;
     });
   }, [leads, statusFilter, priorityFilter, search]);
+
+  // ── Poll for new data every 10 s so the UI stays in sync without a refresh
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/leads');
+        if (res.ok) {
+          const data = await res.json() as { leads: SerializedLead[] };
+          setLeads(data.leads);
+        }
+      } catch {
+        // silently ignore — next tick will retry
+      }
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, []);
 
   // ── Counts for summary chips ─────────────────────────────────────────────
   const unassignedCount = role === 'Admin' ? leads.filter((l) => !l.assignedTo).length : 0;
@@ -236,7 +252,18 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
                     {/* Contact */}
                     <td className="px-4 py-3">
                       <div className="text-black">{lead.email}</div>
-                      <div className="text-xs text-gray-500">{lead.phone}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-gray-500">{lead.phone}</span>
+                        <a
+                          href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-medium text-green-600 hover:text-green-700 hover:underline"
+                          title="Open WhatsApp chat"
+                        >
+                          WhatsApp
+                        </a>
+                      </div>
                     </td>
 
                     {/* Property */}

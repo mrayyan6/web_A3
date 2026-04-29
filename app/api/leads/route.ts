@@ -7,6 +7,7 @@ import { LEAD_STATUSES } from '@/types/lead';
 import User from '@/models/User';
 import { serializeLead } from '@/lib/leads';
 import { computePriority, computeScore } from '@/lib/scoring';
+import { sendNewLeadEmail } from '@/lib/email';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -77,10 +78,15 @@ export async function POST(req: NextRequest) {
       select: 'name email',
     });
 
-    return NextResponse.json(
-      { lead: serializeLead(populated.toObject() as Parameters<typeof serializeLead>[0]) },
-      { status: 201 }
-    );
+    const serialized = serializeLead(populated.toObject() as Parameters<typeof serializeLead>[0]);
+
+    // Notify all admins in background — don't block the response
+    User.find({ role: 'Admin' }).select('email').lean().then((admins) => {
+      const emails = admins.map((a) => String(a.email)).filter(Boolean);
+      sendNewLeadEmail(serialized, emails).catch(() => {});
+    }).catch(() => {});
+
+    return NextResponse.json({ lead: serialized }, { status: 201 });
   } catch (err) {
     console.error('[LEADS_POST]', err);
     const message = err instanceof Error ? err.message : 'Failed to create lead';
