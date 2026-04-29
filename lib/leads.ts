@@ -1,5 +1,7 @@
 import type { SerializedLead } from '@/types/lead';
 
+type PopulatedAgent = { _id: { toString(): string } | string; name: string; email: string };
+
 type RawLead = {
   _id: { toString(): string } | string;
   name: string;
@@ -8,11 +10,9 @@ type RawLead = {
   propertyInterest: string;
   budget: number;
   status: SerializedLead['status'];
+  priority?: SerializedLead['priority'];
   notes?: string;
-  assignedTo:
-    | { _id: { toString(): string } | string; name: string; email: string }
-    | { toString(): string }
-    | string;
+  assignedTo?: PopulatedAgent | { toString(): string } | string | null;
   score?: number;
   createdAt: Date | string;
   updatedAt: Date | string;
@@ -27,12 +27,20 @@ function idToString(id: unknown): string {
 }
 
 export function serializeLead(lead: RawLead): SerializedLead {
-  const assignedTo = lead.assignedTo as RawLead['assignedTo'];
-  const isPopulated =
-    typeof assignedTo === 'object' &&
-    assignedTo !== null &&
-    'name' in assignedTo &&
-    'email' in assignedTo;
+  const raw = lead.assignedTo;
+
+  let assignedTo: SerializedLead['assignedTo'] = null;
+  if (raw != null) {
+    const isPopulated =
+      typeof raw === 'object' && 'name' in raw && 'email' in raw;
+    assignedTo = isPopulated
+      ? {
+          _id: idToString((raw as PopulatedAgent)._id),
+          name: (raw as PopulatedAgent).name,
+          email: (raw as PopulatedAgent).email,
+        }
+      : { _id: idToString(raw), name: '', email: '' };
+  }
 
   return {
     _id: idToString(lead._id),
@@ -42,15 +50,10 @@ export function serializeLead(lead: RawLead): SerializedLead {
     propertyInterest: lead.propertyInterest,
     budget: lead.budget,
     status: lead.status,
+    priority: lead.priority ?? 'Low',
     notes: lead.notes ?? '',
-    assignedTo: isPopulated
-      ? {
-          _id: idToString((assignedTo as { _id: unknown })._id),
-          name: (assignedTo as { name: string }).name,
-          email: (assignedTo as { email: string }).email,
-        }
-      : { _id: idToString(assignedTo), name: '', email: '' },
-    score: lead.score ?? 0,
+    assignedTo,
+    score: lead.score ?? 25,
     createdAt: lead.createdAt instanceof Date ? lead.createdAt.toISOString() : lead.createdAt,
     updatedAt: lead.updatedAt instanceof Date ? lead.updatedAt.toISOString() : lead.updatedAt,
   };

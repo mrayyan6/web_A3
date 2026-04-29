@@ -1,6 +1,9 @@
 export const LEAD_STATUSES = ['New', 'Contacted', 'In Progress', 'Closed'] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
+export const PRIORITY_LEVELS = ['High', 'Medium', 'Low'] as const;
+export type Priority = (typeof PRIORITY_LEVELS)[number];
+
 export type SerializedAgent = {
   _id: string;
   name: string;
@@ -15,8 +18,9 @@ export type SerializedLead = {
   propertyInterest: string;
   budget: number;
   status: LeadStatus;
+  priority: Priority;
   notes: string;
-  assignedTo: SerializedAgent;
+  assignedTo: SerializedAgent | null;
   score: number;
   createdAt: string;
   updatedAt: string;
@@ -30,6 +34,5 @@ export type LeadFormInput = {
   budget: number;
   status: LeadStatus;
   notes: string;
-  assignedTo?: string;
-  score: number;
+  assignedTo?: string | null;
 };

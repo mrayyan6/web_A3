@@ -1,5 +1,5 @@
 import mongoose, { Document, Model, Schema, Types } from 'mongoose';
-import { LeadStatus, LEAD_STATUSES } from '@/types/lead';
+import { LeadStatus, LEAD_STATUSES, Priority, PRIORITY_LEVELS } from '@/types/lead';
 
 export interface ILead extends Document {
   name: string;
@@ -8,8 +8,9 @@ export interface ILead extends Document {
   propertyInterest: string;
   budget: number;
   status: LeadStatus;
+  priority: Priority;
   notes: string;
-  assignedTo: Types.ObjectId;
+  assignedTo?: Types.ObjectId | null;
   score: number;
   createdAt: Date;
   updatedAt: Date;
@@ -38,14 +39,20 @@ const LeadSchema = new Schema<ILead>(
       default: 'New',
       index: true,
     },
+    priority: {
+      type: String,
+      enum: { values: PRIORITY_LEVELS, message: 'Invalid priority' },
+      default: 'Low',
+      index: true,
+    },
     notes: { type: String, default: '', trim: true },
     assignedTo: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'assignedTo is required'],
+      default: null,
       index: true,
     },
-    score: { type: Number, default: 0, min: 0, max: 100 },
+    score: { type: Number, default: 25, min: 0, max: 100 },
   },
   { timestamps: true }
 );

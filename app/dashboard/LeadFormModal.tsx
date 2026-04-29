@@ -1,8 +1,9 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import React, { FormEvent, useState, useEffect } from 'react';
 import type { SerializedLead, SerializedAgent, LeadStatus } from '@/types/lead';
 import { LEAD_STATUSES } from '@/types/lead';
+import { computePriority } from '@/lib/scoring';
 
 type Mode = 'create' | 'edit';
 
@@ -14,6 +15,12 @@ type Props = {
   agents: SerializedAgent[];
   onClose: () => void;
   onSaved: (lead: SerializedLead) => void;
+};
+
+const priorityColors = {
+  High: 'bg-red-100 text-red-700 border-red-300',
+  Medium: 'bg-amber-100 text-amber-700 border-amber-300',
+  Low: 'bg-green-100 text-green-700 border-green-300',
 };
 
 export default function LeadFormModal({
@@ -34,17 +41,20 @@ export default function LeadFormModal({
   const [budget, setBudget] = useState<string>(
     initialLead?.budget != null ? String(initialLead.budget) : ''
   );
-  const [status, setStatus] = useState<LeadStatus>(initialLead?.status ?? 'New');
-  const [score, setScore] = useState<string>(
-    initialLead?.score != null ? String(initialLead.score) : '0'
+  const [derivedPriority, setDerivedPriority] = useState<string>(
+    initialLead?.priority ? `${initialLead.priority}` : 'Low'
   );
+  const [status, setStatus] = useState<LeadStatus>(initialLead?.status ?? 'New');
   const [notes, setNotes] = useState(initialLead?.notes ?? '');
   const [assignedTo, setAssignedTo] = useState(
-    initialLead?.assignedTo._id ?? (role === 'Admin' ? '' : currentUserId)
+    initialLead?.assignedTo?._id ?? (role === 'Admin' ? '' : currentUserId)
   );
 
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Live priority preview derived from the budget field
+  const previewPriority = budget ? computePriority(Number(budget)) : null;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -58,12 +68,12 @@ export default function LeadFormModal({
       propertyInterest,
       budget: Number(budget),
       status,
-      score: Number(score),
       notes,
     };
 
-    if (role === 'Admin' && assignedTo) {
-      payload.assignedTo = assignedTo;
+    // Admins can assign or leave unassigned; Agents always submit their own id server-side
+    if (role === 'Admin') {
+      payload.assignedTo = assignedTo || null;
     }
 
     const url = mode === 'create' ? '/api/leads' : `/api/leads/${initialLead!._id}`;
@@ -85,6 +95,17 @@ export default function LeadFormModal({
 
     onSaved(data.lead);
   }
+
+  // Recalculate priority live when budget changes
+  useEffect(() => {
+    const num = Number(budget || 0);
+    try {
+      const p = computePriority(num);
+      setDerivedPriority(p);
+    } catch (e) {
+      setDerivedPriority('Low');
+    }
+  }, [budget]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
@@ -149,14 +170,17 @@ export default function LeadFormModal({
             </Field>
 
             <Field label="Budget (PKR)" required>
-              <input
-                type="number"
-                min={0}
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
-                required
-                className={inputClass}
-              />
+              <div className="space-y-1">
+                <input
+                  type="number"
+                  min={0}
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  required
+                  className={inputClass}
+                />
+                <div className="mt-1 text-sm text-black">Priority: {derivedPriority}</div>
+              </div>
             </Field>
 
             <Field label="Status">
@@ -173,26 +197,14 @@ export default function LeadFormModal({
               </select>
             </Field>
 
-            <Field label="Score (0-100)">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={score}
-                onChange={(e) => setScore(e.target.value)}
-                className={inputClass}
-              />
-            </Field>
-
             {role === 'Admin' && (
-              <Field label="Assigned To" required>
+              <Field label="Assigned To">
                 <select
                   value={assignedTo}
                   onChange={(e) => setAssignedTo(e.target.value)}
-                  required
                   className={inputClass}
                 >
-                  <option value="">— Select an agent —</option>
+                  <option value="">— Unassigned —</option>
                   {agents.map((a) => (
                     <option key={a._id} value={a._id}>
                       {a.name} ({a.email})
@@ -232,11 +244,7 @@ export default function LeadFormModal({
               disabled={submitting}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
             >
-              {submitting
-                ? 'Saving…'
-                : mode === 'create'
-                  ? 'Create Lead'
-                  : 'Save Changes'}
+              {submitting ? 'Saving…' : mode === 'create' ? 'Create Lead' : 'Save Changes'}
             </button>
           </div>
         </form>

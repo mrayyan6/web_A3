@@ -7,6 +7,7 @@ import Lead from '@/models/Lead';
 import { LEAD_STATUSES } from '@/types/lead';
 import User from '@/models/User';
 import { serializeLead } from '@/lib/leads';
+import { computePriority, computeScore } from '@/lib/scoring';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -28,12 +29,17 @@ async function loadAndAuthorize(id: string, session: { user: { id: string; role:
     return { error: NextResponse.json({ error: 'Lead not found' }, { status: 404 }) };
   }
 
-  // Agents may only access leads assigned to them
   if (session.user.role !== 'Admin') {
+    // Agents can only access leads explicitly assigned to them
     const assignedId =
-      typeof lead.assignedTo === 'object' && lead.assignedTo !== null
+      lead.assignedTo &&
+      typeof lead.assignedTo === 'object' &&
+      '_id' in lead.assignedTo
         ? (lead.assignedTo as { _id: { toString(): string } })._id.toString()
-        : String(lead.assignedTo);
+        : lead.assignedTo
+          ? String(lead.assignedTo)
+          : null;
+
     if (assignedId !== session.user.id) {
       return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
     }
@@ -65,16 +71,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
   try {
     const body = await req.json();
-    const allowed = [
-      'name',
-      'email',
-      'phone',
-      'propertyInterest',
-      'budget',
-      'status',
-      'notes',
-      'score',
-    ] as const;
+    const allowed = ['name', 'email', 'phone', 'propertyInterest', 'budget', 'status', 'notes'] as const;
 
     const updates: Record<string, unknown> = {};
     for (const key of allowed) {
@@ -85,15 +82,24 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    if (updates.budget != null) updates.budget = Number(updates.budget);
-    if (updates.score != null) updates.score = Number(updates.score);
+    // When budget changes, auto-recompute priority and score
+    if (updates.budget != null) {
+      const newBudget = Number(updates.budget);
+      updates.budget = newBudget;
+      updates.priority = computePriority(newBudget);
+      updates.score = computeScore(newBudget);
+    }
 
-    // Only admins can reassign leads
-    if (session.user.role === 'Admin' && body.assignedTo) {
-      if (!isValidId(body.assignedTo)) {
+    // Only Admins can change assignedTo (including setting to null to unassign)
+    if (session.user.role === 'Admin' && 'assignedTo' in body) {
+      const incoming = body.assignedTo;
+      if (incoming === null || incoming === '') {
+        updates.assignedTo = null;
+      } else if (isValidId(String(incoming))) {
+        updates.assignedTo = incoming;
+      } else {
         return NextResponse.json({ error: 'Invalid assignedTo id' }, { status: 400 });
       }
-      updates.assignedTo = body.assignedTo;
     }
 
     const updated = await Lead.findByIdAndUpdate(id, updates, {
@@ -119,7 +125,10 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (session.user.role !== 'Admin') {
-    return NextResponse.json({ error: 'Forbidden: only Admins can delete leads' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'Forbidden: only Admins can delete leads' },
+      { status: 403 }
+    );
   }
 
   const { id } = await ctx.params;
