@@ -47,6 +47,8 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | LeadStatus>('All');
   const [priorityFilter, setPriorityFilter] = useState<'All' | Priority>('All');
+  const [dateFilter, setDateFilter] = useState<'All' | 'Today' | 'Last7' | 'Last30'>('All');
+  const [dateSort, setDateSort] = useState<'Newest' | 'Oldest'>('Newest');
 
   // Modal state
   const [formOpen, setFormOpen] = useState(false);
@@ -55,9 +57,22 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
   const [assignTarget, setAssignTarget] = useState<SerializedLead | null>(null);
 
   const filteredLeads = useMemo(() => {
-    return leads.filter((l) => {
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    const inDateWindow = (isoDate: string) => {
+      const t = new Date(isoDate).getTime();
+      if (Number.isNaN(t)) return true;
+      if (dateFilter === 'Today') return now - t <= oneDay;
+      if (dateFilter === 'Last7') return now - t <= 7 * oneDay;
+      if (dateFilter === 'Last30') return now - t <= 30 * oneDay;
+      return true;
+    };
+
+    const filtered = leads.filter((l) => {
       if (statusFilter !== 'All' && l.status !== statusFilter) return false;
       if (priorityFilter !== 'All' && l.priority !== priorityFilter) return false;
+      if (!inDateWindow(l.createdAt)) return false;
       if (search) {
         const q = search.toLowerCase();
         return (
@@ -69,7 +84,13 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
       }
       return true;
     });
-  }, [leads, statusFilter, priorityFilter, search]);
+
+    return filtered.sort((a, b) => {
+      const ta = new Date(a.createdAt).getTime();
+      const tb = new Date(b.createdAt).getTime();
+      return dateSort === 'Newest' ? tb - ta : ta - tb;
+    });
+  }, [leads, statusFilter, priorityFilter, dateFilter, dateSort, search]);
 
   // ── Poll for new data every 10 s so the UI stays in sync without a refresh
   useEffect(() => {
@@ -90,6 +111,78 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
   // ── Counts for summary chips ─────────────────────────────────────────────
   const unassignedCount = role === 'Admin' ? leads.filter((l) => !l.assignedTo).length : 0;
   const highPriorityCount = leads.filter((l) => l.priority === 'High').length;
+
+  const statusDistribution = useMemo(() => {
+    const buckets = {
+      New: 0,
+      Assigned: 0,
+      'In Progress': 0,
+      Closed: 0,
+    } as Record<'New' | 'Assigned' | 'In Progress' | 'Closed', number>;
+
+    for (const l of leads) {
+      if (l.status === 'Closed') {
+        buckets.Closed += 1;
+      } else if (l.status === 'In Progress') {
+        buckets['In Progress'] += 1;
+      } else if (l.assignedTo) {
+        buckets.Assigned += 1;
+      } else {
+        buckets.New += 1;
+      }
+    }
+
+    return [
+      { status: 'New', count: buckets.New },
+      { status: 'Assigned', count: buckets.Assigned },
+      { status: 'In Progress', count: buckets['In Progress'] },
+      { status: 'Closed', count: buckets.Closed },
+    ];
+  }, [leads]);
+
+  const priorityDistribution = useMemo(
+    () =>
+      PRIORITY_LEVELS.map((priority) => ({
+        priority,
+        count: leads.filter((l) => l.priority === priority).length,
+      })),
+    [leads]
+  );
+
+  const agentPerformance = useMemo(() => {
+    if (role !== 'Admin') return [] as Array<{
+      id: string;
+      name: string;
+      email: string;
+      total: number;
+      inProgress: number;
+      closed: number;
+    }>;
+
+    const map = new Map<string, { id: string; name: string; email: string; total: number; inProgress: number; closed: number }>();
+
+    for (const a of agents) {
+      map.set(a._id, {
+        id: a._id,
+        name: a.name,
+        email: a.email,
+        total: 0,
+        inProgress: 0,
+        closed: 0,
+      });
+    }
+
+    for (const lead of leads) {
+      if (!lead.assignedTo) continue;
+      const current = map.get(lead.assignedTo._id);
+      if (!current) continue;
+      current.total += 1;
+      if (lead.status === 'In Progress') current.inProgress += 1;
+      if (lead.status === 'Closed') current.closed += 1;
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [role, agents, leads]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -138,6 +231,89 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
 
   return (
     <div className="space-y-4">
+
+      {role === 'Admin' && (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold text-black">Analytics Dashboard</h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Leads</p>
+              <p className="mt-2 text-3xl font-bold text-black">{leads.length}</p>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-4 sm:col-span-2 lg:col-span-3">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Status Distribution</p>
+              <div className="space-y-2">
+                {statusDistribution.map((item) => {
+                  const pct = leads.length > 0 ? Math.round((item.count / leads.length) * 100) : 0;
+                  return (
+                    <div key={item.status} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs text-black">
+                        <span>{item.status}</span>
+                        <span>{item.count} ({pct}%)</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Priority Distribution</p>
+              <div className="space-y-2">
+                {priorityDistribution.map((item) => {
+                  const pct = leads.length > 0 ? Math.round((item.count / leads.length) * 100) : 0;
+                  const tone = item.priority === 'High' ? 'bg-red-500' : item.priority === 'Medium' ? 'bg-amber-500' : 'bg-green-500';
+                  return (
+                    <div key={item.priority} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs text-black">
+                        <span>{item.priority}</span>
+                        <span>{item.count} ({pct}%)</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                        <div className={`h-full rounded-full ${tone}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Agent Performance</p>
+              <div className="space-y-2 max-h-56 overflow-auto pr-1">
+                {agentPerformance.length === 0 ? (
+                  <p className="text-sm text-gray-500">No agents found.</p>
+                ) : (
+                  agentPerformance.map((a) => (
+                    <div key={a.id} className="rounded-lg border border-gray-100 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-black truncate">{a.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{a.email}</p>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-black border border-gray-200">
+                          {a.total} leads
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2 text-xs">
+                        <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">In Progress: {a.inProgress}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">Closed: {a.closed}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -200,6 +376,28 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
             <option key={p} value={p}>{p}</option>
           ))}
         </select>
+        {role === 'Agent' && (
+          <>
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as 'All' | 'Today' | 'Last7' | 'Last30')}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-40"
+            >
+              <option value="All">All dates</option>
+              <option value="Today">Today</option>
+              <option value="Last7">Last 7 days</option>
+              <option value="Last30">Last 30 days</option>
+            </select>
+            <select
+              value={dateSort}
+              onChange={(e) => setDateSort(e.target.value as 'Newest' | 'Oldest')}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-40"
+            >
+              <option value="Newest">Newest first</option>
+              <option value="Oldest">Oldest first</option>
+            </select>
+          </>
+        )}
       </div>
 
       {/* ── Table ───────────────────────────────────────────────────────── */}
