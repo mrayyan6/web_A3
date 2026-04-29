@@ -34,6 +34,12 @@ function pageRedirect(req: NextRequest, path: string) {
   return NextResponse.redirect(new URL(path, req.url));
 }
 
+function getRequestIdentity(req: NextRequest, token: { sub?: string | null; email?: string | null }) {
+  const forwardedFor = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const realIp = req.headers.get('x-real-ip');
+  return token.sub || token.email || forwardedFor || realIp || 'anonymous-agent';
+}
+
 function applyAgentRateLimit(req: NextRequest, key: string) {
   const now = Date.now();
   const bucket = rateLimitBucket.get(key);
@@ -162,8 +168,8 @@ export default async function middleware(req: NextRequest) {
 
   // Admins are not limited; Agents are capped at 50 requests/minute on protected APIs.
   if (isProtectedApi && role === 'Agent') {
-    const identity = token?.sub || token?.email || req.ip || 'anonymous-agent';
-    const limitError = applyAgentRateLimit(req, `${identity}`);
+    const identity = getRequestIdentity(req, token ?? {});
+    const limitError = applyAgentRateLimit(req, identity);
     if (limitError) return limitError;
   }
 

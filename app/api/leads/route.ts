@@ -36,8 +36,7 @@ export async function GET() {
       { $group: { _id: '$leadId', last: { $max: '$createdAt' } } },
     ]);
     for (const a of ag) {
-      activityMap[String(a._id)] = a.last ? new Date(a.last).toISOString() : null;
-    }
+    activityMap[String(a._id)] = a.last ? new Date(a.last).toISOString() : "";    }
   }
 
   const serialized = leads.map((l) => {
