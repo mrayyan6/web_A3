@@ -280,16 +280,32 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
                       })}
                     </td>
 
-                    {/* Priority badge */}
+                    {/* Priority badge with overdue/stale indicators */}
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${priorityStyles[lead.priority]}`}
-                      >
-                        {lead.priority === 'High' && (
-                          <span className="mr-1 inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${priorityStyles[lead.priority]}`}
+                        >
+                          {lead.priority === 'High' && (
+                            <span className="mr-1 inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
+                          )}
+                          {lead.priority} Priority
+                        </span>
+
+                        {/* Overdue follow-up */}
+                        {lead.followUpDate && new Date(lead.followUpDate) < new Date() && (
+                          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 border border-red-200">
+                            Overdue
+                          </span>
                         )}
-                        {lead.priority} Priority
-                      </span>
+
+                        {/* No activity in last 7 days */}
+                        {(!lead.lastActivityAt || (new Date().getTime() - new Date(lead.lastActivityAt).getTime()) > 7 * 24 * 60 * 60 * 1000) && (
+                          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                            No activity 7d+
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Status badge */}

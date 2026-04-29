@@ -9,6 +9,7 @@ export interface ILead extends Document {
   budget: number;
   status: LeadStatus;
   priority: Priority;
+  followUpDate?: Date | null;
   notes: string;
   assignedTo?: Types.ObjectId | null;
   score: number;
@@ -45,6 +46,7 @@ const LeadSchema = new Schema<ILead>(
       default: 'Low',
       index: true,
     },
+    followUpDate: { type: Date, default: null },
     notes: { type: String, default: '', trim: true },
     assignedTo: {
       type: Schema.Types.ObjectId,

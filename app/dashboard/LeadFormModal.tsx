@@ -4,6 +4,7 @@ import React, { FormEvent, useState, useEffect } from 'react';
 import type { SerializedLead, SerializedAgent, LeadStatus } from '@/types/lead';
 import { LEAD_STATUSES } from '@/types/lead';
 import { computePriority } from '@/lib/scoring';
+import LeadTimeline from './LeadTimeline';
 
 type Mode = 'create' | 'edit';
 
@@ -44,6 +45,9 @@ export default function LeadFormModal({
   const [derivedPriority, setDerivedPriority] = useState<string>(
     initialLead?.priority ? `${initialLead.priority}` : 'Low'
   );
+  const [followUpDate, setFollowUpDate] = useState<string | null>(
+    initialLead?.followUpDate ?? null
+  );
   const [status, setStatus] = useState<LeadStatus>(initialLead?.status ?? 'New');
   const [notes, setNotes] = useState(initialLead?.notes ?? '');
   const [assignedTo, setAssignedTo] = useState(
@@ -69,6 +73,7 @@ export default function LeadFormModal({
       budget: Number(budget),
       status,
       notes,
+      followUpDate: followUpDate ?? null,
     };
 
     // Admins can assign or leave unassigned; Agents always submit their own id server-side
@@ -225,6 +230,15 @@ export default function LeadFormModal({
             />
           </Field>
 
+          <Field label="Follow-up Date">
+            <input
+              type="date"
+              value={followUpDate ?? ''}
+              onChange={(e) => setFollowUpDate(e.target.value || null)}
+              className={inputClass}
+            />
+          </Field>
+
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
@@ -248,6 +262,13 @@ export default function LeadFormModal({
             </button>
           </div>
         </form>
+
+        {mode === 'edit' && initialLead && (
+          <div className="px-6 py-4 border-t border-gray-100">
+            <h3 className="text-sm font-medium text-black mb-2">Lead Timeline</h3>
+            <LeadTimeline leadId={initialLead._id} />
+          </div>
+        )}
       </div>
     </div>
   );

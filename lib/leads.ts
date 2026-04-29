@@ -51,9 +51,15 @@ export function serializeLead(lead: RawLead): SerializedLead {
     budget: lead.budget,
     status: lead.status,
     priority: lead.priority ?? 'Low',
+    followUpDate: (lead as any).followUpDate
+      ? (lead as any).followUpDate instanceof Date
+        ? (lead as any).followUpDate.toISOString()
+        : String((lead as any).followUpDate)
+      : null,
     notes: lead.notes ?? '',
     assignedTo,
     score: lead.score ?? 25,
+    lastActivityAt: (lead as any).lastActivityAt ?? null,
     createdAt: lead.createdAt instanceof Date ? lead.createdAt.toISOString() : lead.createdAt,
     updatedAt: lead.updatedAt instanceof Date ? lead.updatedAt.toISOString() : lead.updatedAt,
   };

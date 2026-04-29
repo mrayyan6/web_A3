@@ -19,9 +19,11 @@ export type SerializedLead = {
   budget: number;
   status: LeadStatus;
   priority: Priority;
+  followUpDate?: string | null;
   notes: string;
   assignedTo: SerializedAgent | null;
   score: number;
+  lastActivityAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -35,4 +37,5 @@ export type LeadFormInput = {
   status: LeadStatus;
   notes: string;
   assignedTo?: string | null;
+  followUpDate?: string | null;
 };

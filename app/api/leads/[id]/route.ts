@@ -8,6 +8,7 @@ import { LEAD_STATUSES } from '@/types/lead';
 import User from '@/models/User';
 import { serializeLead } from '@/lib/leads';
 import { computePriority, computeScore } from '@/lib/scoring';
+import { recordActivity } from '@/lib/activity';
 import { sendLeadAssignedEmail } from '@/lib/email';
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -31,15 +32,12 @@ async function loadAndAuthorize(id: string, session: { user: { id: string; role:
   }
 
   if (session.user.role !== 'Admin') {
-    // Agents can only access leads explicitly assigned to them
     const assignedId =
-      lead.assignedTo &&
-      typeof lead.assignedTo === 'object' &&
-      '_id' in lead.assignedTo
+      lead.assignedTo && typeof lead.assignedTo === 'object' && '_id' in lead.assignedTo
         ? (lead.assignedTo as { _id: { toString(): string } })._id.toString()
         : lead.assignedTo
-          ? String(lead.assignedTo)
-          : null;
+        ? String(lead.assignedTo)
+        : null;
 
     if (assignedId !== session.user.id) {
       return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
@@ -57,9 +55,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const result = await loadAndAuthorize(id, session);
   if (result.error) return result.error;
 
-  return NextResponse.json({
-    lead: serializeLead(result.lead.toObject() as Parameters<typeof serializeLead>[0]),
-  });
+  return NextResponse.json({ lead: serializeLead(result.lead.toObject() as Parameters<typeof serializeLead>[0]) });
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
@@ -91,7 +87,16 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       updates.score = computeScore(newBudget);
     }
 
-    // Only Admins can change assignedTo (including setting to null to unassign)
+    // followUpDate handling
+    if ('followUpDate' in body) {
+      if (body.followUpDate === null || body.followUpDate === '') {
+        updates.followUpDate = null;
+      } else {
+        updates.followUpDate = new Date(body.followUpDate);
+      }
+    }
+
+    // Only Admins can change assignedTo
     if (session.user.role === 'Admin' && 'assignedTo' in body) {
       const incoming = body.assignedTo;
       if (incoming === null || incoming === '') {
@@ -103,23 +108,59 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       }
     }
 
-    const updated = await Lead.findByIdAndUpdate(id, updates, {
-      new: true,
-      runValidators: true,
-    }).populate({ path: 'assignedTo', model: User, select: 'name email' });
+    const updated = await Lead.findByIdAndUpdate(id, updates, { new: true, runValidators: true }).populate({
+      path: 'assignedTo',
+      model: User,
+      select: 'name email',
+    });
 
-    if (!updated) {
-      return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
-    }
+    if (!updated) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
 
     const serialized = serializeLead(updated.toObject() as Parameters<typeof serializeLead>[0]);
 
-    // If a specific agent was just assigned, notify them in background
+    // Notify assigned agent in background
     if (session.user.role === 'Admin' && 'assignedTo' in body && body.assignedTo && body.assignedTo !== '') {
       const agent = updated.assignedTo as { name: string; email: string } | null;
       if (agent && typeof agent === 'object' && 'email' in agent) {
         sendLeadAssignedEmail(serialized, agent.email, agent.name).catch(() => {});
       }
+    }
+
+    // Record activity entries for changes
+    try {
+      // status change
+      if (updates.status) {
+        await recordActivity(serialized, 'status_changed', session.user.id, { newStatus: updates.status });
+      }
+      // assignment change
+      if ('assignedTo' in body) {
+        const wasAssigned = (result.lead.assignedTo && String((result.lead.assignedTo as any)._id)) || result.lead.assignedTo || null;
+        const nowAssigned = updates.assignedTo ?? null;
+        if (nowAssigned && !wasAssigned) {
+          await recordActivity(serialized, 'assigned', session.user.id, { assignedTo: nowAssigned });
+        } else if (nowAssigned && wasAssigned && String(nowAssigned) !== String(wasAssigned)) {
+          await recordActivity(serialized, 'reassigned', session.user.id, { from: wasAssigned, to: nowAssigned });
+        } else if (!nowAssigned && wasAssigned) {
+          await recordActivity(serialized, 'assigned', session.user.id, { assignedTo: null });
+        }
+      }
+      // notes change
+      if ('notes' in updates) {
+        await recordActivity(serialized, 'notes_updated', session.user.id, { notes: updates.notes });
+      }
+      // follow-up change
+      if ('followUpDate' in updates) {
+        if (updates.followUpDate) {
+          await recordActivity(serialized, 'followup_set', session.user.id, { followUpDate: updates.followUpDate });
+        } else {
+          await recordActivity(serialized, 'followup_cleared', session.user.id, {});
+        }
+      }
+
+      // update lastActivityAt
+      serialized.lastActivityAt = new Date().toISOString();
+    } catch (e) {
+      // ignore activity errors
     }
 
     return NextResponse.json({ lead: serialized });
@@ -133,17 +174,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'Admin') {
-    return NextResponse.json(
-      { error: 'Forbidden: only Admins can delete leads' },
-      { status: 403 }
-    );
-  }
+  if (session.user.role !== 'Admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id } = await ctx.params;
-  const result = await loadAndAuthorize(id, session);
-  if (result.error) return result.error;
+  if (!isValidId(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
+  await connectDB();
   await Lead.findByIdAndDelete(id);
   return NextResponse.json({ success: true });
 }

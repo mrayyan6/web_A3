@@ -8,6 +8,9 @@ import User from '@/models/User';
 import { serializeLead } from '@/lib/leads';
 import { computePriority, computeScore } from '@/lib/scoring';
 import { sendNewLeadEmail } from '@/lib/email';
+import ActivityLog from '@/models/ActivityLog';
+import { recordActivity } from '@/lib/activity';
+import mongoose from 'mongoose';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -24,9 +27,27 @@ export async function GET() {
     .sort({ createdAt: -1 })
     .lean();
 
-  return NextResponse.json({
-    leads: leads.map((l) => serializeLead(l as Parameters<typeof serializeLead>[0])),
+  // Attach lastActivityAt for each lead (most recent activity)
+  const leadIds = leads.map((l) => (l._id ? (typeof l._id === 'string' ? new mongoose.Types.ObjectId(l._id) : l._id) : null)).filter(Boolean);
+  const activityMap: Record<string, string> = {};
+  if (leadIds.length > 0) {
+    const ag = await ActivityLog.aggregate([
+      { $match: { leadId: { $in: leadIds } } },
+      { $group: { _id: '$leadId', last: { $max: '$createdAt' } } },
+    ]);
+    for (const a of ag) {
+      activityMap[String(a._id)] = a.last ? new Date(a.last).toISOString() : null;
+    }
+  }
+
+  const serialized = leads.map((l) => {
+    const s = serializeLead(l as Parameters<typeof serializeLead>[0]);
+    s.lastActivityAt = activityMap[s._id] ?? null;
+    // compute overdue followup flag in client via lastActivityAt and followUpDate if needed
+    return s;
   });
+
+  return NextResponse.json({ leads: serialized });
 }
 
 export async function POST(req: NextRequest) {
@@ -38,7 +59,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, email, phone, propertyInterest, budget, status, notes, assignedTo } = body;
+    const { name, email, phone, propertyInterest, budget, status, notes, assignedTo, followUpDate } = body;
 
     if (!name || !email || !phone || !propertyInterest || budget == null) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -70,6 +91,7 @@ export async function POST(req: NextRequest) {
       assignedTo: finalAssignedTo,
       priority,
       score,
+      followUpDate: followUpDate ? new Date(followUpDate) : null,
     });
 
     const populated = await lead.populate({
@@ -79,6 +101,18 @@ export async function POST(req: NextRequest) {
     });
 
     const serialized = serializeLead(populated.toObject() as Parameters<typeof serializeLead>[0]);
+
+    // Record activity: created
+    try {
+      await recordActivity(serialized, 'created', session.user.id, { budget: budgetNum });
+      if (followUpDate) {
+        await recordActivity(serialized, 'followup_set', session.user.id, { followUpDate });
+      }
+      // mark lastActivityAt as now since we just recorded activity
+      serialized.lastActivityAt = new Date().toISOString();
+    } catch (e) {
+      // ignore
+    }
 
     // Notify all admins in background — don't block the response
     User.find({ role: 'Admin' }).select('email').lean().then((admins) => {
