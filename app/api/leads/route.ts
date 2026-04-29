@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongoose';
-import Lead, { LEAD_STATUSES } from '@/models/Lead';
+import Lead from '@/models/Lead';
+import { LEAD_STATUSES } from '@/types/lead';
 import User from '@/models/User';
 import { serializeLead } from '@/lib/leads';
 

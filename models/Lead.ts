@@ -1,7 +1,5 @@
 import mongoose, { Document, Model, Schema, Types } from 'mongoose';
-
-export const LEAD_STATUSES = ['New', 'Contacted', 'In Progress', 'Closed'] as const;
-export type LeadStatus = (typeof LEAD_STATUSES)[number];
+import { LeadStatus, LEAD_STATUSES } from '@/types/lead';
 
 export interface ILead extends Document {
   name: string;

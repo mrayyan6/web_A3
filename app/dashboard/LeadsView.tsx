@@ -1,9 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { SerializedLead, SerializedAgent } from '@/types/lead';
-import type { LeadStatus } from '@/models/Lead';
-import { LEAD_STATUSES } from '@/models/Lead';
+import { LEAD_STATUSES } from '@/types/lead';
+import type { SerializedLead, SerializedAgent, LeadStatus } from '@/types/lead';
 import LeadFormModal from './LeadFormModal';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 
@@ -83,33 +82,35 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
       {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-black">Leads</h1>
+          <p className="text-sm text-black mt-0.5">
             {role === 'Admin'
               ? `Showing all ${leads.length} leads in the system`
               : `Showing ${leads.length} leads assigned to you`}
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          + New Lead
-        </button>
+        {role === 'Admin' && (
+          <button
+            onClick={openCreate}
+            className="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            + New Lead
+          </button>
+        )}
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4 flex flex-col sm:flex-row gap-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4 flex flex-col sm:flex-row gap-3">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search name, email, or property…"
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as 'All' | LeadStatus)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
           <option value="All">All statuses</option>
           {LEAD_STATUSES.map((s) => (
@@ -124,7 +125,7 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <thead className="bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-black uppercase tracking-wider">
               <tr>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Contact</th>
@@ -141,35 +142,37 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
                 <tr>
                   <td
                     colSpan={role === 'Admin' ? 8 : 7}
-                    className="px-4 py-12 text-center text-gray-500"
+                    className="px-4 py-12 text-center text-black"
                   >
                     No leads to display.{' '}
-                    <button
-                      onClick={openCreate}
-                      className="text-blue-600 hover:underline font-medium"
-                    >
-                      Create your first lead
-                    </button>
+                    {role === 'Admin' && (
+                      <button
+                        onClick={openCreate}
+                        className="text-blue-600 hover:underline font-medium"
+                      >
+                        Create your first lead
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
                 filteredLeads.map((lead) => (
                   <tr key={lead._id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">{lead.name}</div>
+                      <div className="font-medium text-black">{lead.name}</div>
                       {lead.notes && (
-                        <div className="text-xs text-gray-500 truncate max-w-[200px]">
+                        <div className="text-xs text-black truncate max-w-[200px]">
                           {lead.notes}
                         </div>
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-gray-900">{lead.email}</div>
-                      <div className="text-xs text-gray-500">{lead.phone}</div>
+                      <div className="text-black">{lead.email}</div>
+                      <div className="text-xs text-black">{lead.phone}</div>
                     </td>
-                    <td className="px-4 py-3 text-gray-700">{lead.propertyInterest}</td>
-                    <td className="px-4 py-3 text-gray-700">
-                      ${lead.budget.toLocaleString()}
+                    <td className="px-4 py-3 text-black">{lead.propertyInterest}</td>
+                    <td className="px-4 py-3 text-black">
+                      {lead.budget.toLocaleString('en-PK', { style: 'currency', currency: 'PKR', maximumFractionDigits: 0 })}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -186,11 +189,11 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
                             style={{ width: `${Math.min(100, Math.max(0, lead.score))}%` }}
                           />
                         </div>
-                        <span className="text-xs text-gray-600 w-7">{lead.score}</span>
+                        <span className="text-xs text-black w-7">{lead.score}</span>
                       </div>
                     </td>
                     {role === 'Admin' && (
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-black">
                         {lead.assignedTo.name || '—'}
                       </td>
                     )}
@@ -201,12 +204,14 @@ export default function LeadsView({ initialLeads, role, currentUserId, agents }:
                       >
                         Edit
                       </button>
-                      <button
-                        onClick={() => setDeleteTarget(lead)}
-                        className="text-red-600 hover:text-red-700 hover:underline text-sm font-medium"
-                      >
-                        Delete
-                      </button>
+                      {role === 'Admin' && (
+                        <button
+                          onClick={() => setDeleteTarget(lead)}
+                          className="text-red-600 hover:text-red-700 hover:underline text-sm font-medium"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

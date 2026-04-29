@@ -1,4 +1,5 @@
-import type { LeadStatus } from '@/models/Lead';
+export const LEAD_STATUSES = ['New', 'Contacted', 'In Progress', 'Closed'] as const;
+export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
 export type SerializedAgent = {
   _id: string;

@@ -1,9 +1,8 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import type { SerializedLead, SerializedAgent } from '@/types/lead';
-import type { LeadStatus } from '@/models/Lead';
-import { LEAD_STATUSES } from '@/models/Lead';
+import type { SerializedLead, SerializedAgent, LeadStatus } from '@/types/lead';
+import { LEAD_STATUSES } from '@/types/lead';
 
 type Mode = 'create' | 'edit';
 
@@ -94,12 +93,12 @@ export default function LeadFormModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-black">
             {mode === 'create' ? 'New Lead' : 'Edit Lead'}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+            className="text-black hover:text-gray-700 text-xl leading-none"
             aria-label="Close"
           >
             ×
@@ -149,7 +148,7 @@ export default function LeadFormModal({
               />
             </Field>
 
-            <Field label="Budget (USD)" required>
+            <Field label="Budget (PKR)" required>
               <input
                 type="number"
                 min={0}
@@ -224,7 +223,7 @@ export default function LeadFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-medium text-black hover:bg-gray-100 rounded-lg transition-colors"
             >
               Cancel
             </button>
@@ -247,7 +246,7 @@ export default function LeadFormModal({
 }
 
 const inputClass =
-  'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
+  'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
 
 function Field({
   label,
@@ -260,7 +259,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-sm font-medium text-gray-700 mb-1">
+      <span className="block text-sm font-medium text-black mb-1">
         {label}
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </span>

@@ -16,17 +16,17 @@ export default function DashboardHeader({
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
             P
           </div>
-          <h1 className="text-lg font-semibold text-gray-900">Property CRM</h1>
+          <h1 className="text-lg font-semibold text-black">Property CRM</h1>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <p className="text-sm font-medium text-gray-900">{userName}</p>
-            <p className="text-xs text-gray-500">{role}</p>
+            <p className="text-sm font-medium text-black">{userName}</p>
+            <p className="text-xs text-black">{role}</p>
           </div>
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
-            className="text-sm text-gray-700 hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            className="text-sm text-black hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
           >
             Sign out
           </button>

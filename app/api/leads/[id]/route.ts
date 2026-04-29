@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth';
 import mongoose from 'mongoose';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongoose';
-import Lead, { LEAD_STATUSES } from '@/models/Lead';
+import Lead from '@/models/Lead';
+import { LEAD_STATUSES } from '@/types/lead';
 import User from '@/models/User';
 import { serializeLead } from '@/lib/leads';
 
@@ -117,6 +118,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.user.role !== 'Admin') {
+    return NextResponse.json({ error: 'Forbidden: only Admins can delete leads' }, { status: 403 });
+  }
 
   const { id } = await ctx.params;
   const result = await loadAndAuthorize(id, session);
